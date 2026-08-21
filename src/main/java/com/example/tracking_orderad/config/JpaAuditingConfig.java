@@ -1,0 +1,42 @@
+package com.example.tracking_orderad.config;
+
+import com.example.tracking_orderad.config.basicauthconfig.AuthenticationFacade;
+import org.springframework.context.annotation.Bean;
+import org.springframework.data.domain.AuditorAware;
+import org.springframework.security.authentication.AnonymousAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.stereotype.Component;
+
+import java.util.Optional;
+
+@Component
+public class JpaAuditingConfig {
+
+    private final AuthenticationFacade authenticationFacade;
+
+    public JpaAuditingConfig(AuthenticationFacade authenticationFacade) {
+        this.authenticationFacade = authenticationFacade;
+    }
+
+    @Bean
+    public AuditorAware<String> auditorProvider() {
+
+        return () -> {
+
+            Authentication authentication =
+                    SecurityContextHolder.getContext().getAuthentication();
+
+            if (authentication == null
+                    || !authentication.isAuthenticated()
+                    || authentication instanceof AnonymousAuthenticationToken) {
+                // Trả về 'SYSTEM' thay vì empty() để các tác vụ gọi từ internal API (không có token)
+                // vẫn được ghi nhận là do hệ thống thực hiện, tránh lỗi null created_by/updated_by
+                return Optional.of("SYSTEM");
+            }
+
+            // Chỉ lấy username, KHÔNG query database
+            return Optional.of(authentication.getName());
+        };
+    }
+}

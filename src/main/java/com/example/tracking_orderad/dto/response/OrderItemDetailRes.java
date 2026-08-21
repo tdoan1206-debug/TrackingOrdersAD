@@ -1,0 +1,21 @@
+package com.example.tracking_orderad.dto.response;
+
+import lombok.Builder;
+import lombok.Getter;
+import lombok.Setter;
+
+import java.math.BigDecimal;
+
+@Getter
+@Setter
+@Builder
+public class OrderItemDetailRes {
+    private String productVariantId;
+    private String productId;
+    private String productName;
+    private String variantName;
+    private String sku;
+    private Integer quantity;
+    private BigDecimal unitPrice;
+    private BigDecimal totalPrice;
+}

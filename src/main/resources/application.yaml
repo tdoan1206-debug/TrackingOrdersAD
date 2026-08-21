@@ -1,0 +1,21 @@
+spring:
+  datasource:
+    username: root
+    password: 123456
+    url: jdbc:mysql://localhost:3306/tracking_order22
+
+server:
+  port: 8117
+
+
+logging:
+  level:
+    com:
+      example:
+        trackingorder: DEBUG
+    org:
+      springframework:
+        security: DEBUG
+      hibernate:
+        SQL: DEBUG
+

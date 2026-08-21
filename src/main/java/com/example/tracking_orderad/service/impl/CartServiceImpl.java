@@ -1,0 +1,175 @@
+package com.example.tracking_orderad.service.impl;
+
+import com.example.tracking_orderad.common.StockStatusEnum;
+import com.example.tracking_orderad.config.basicauthconfig.AuthenticationFacade;
+import com.example.tracking_orderad.configmapper.CartItemMapper;
+import com.example.tracking_orderad.dto.request.AddToCartReq;
+import com.example.tracking_orderad.dto.request.UpdateCartReq;
+import com.example.tracking_orderad.dto.response.CartItemRes;
+import com.example.tracking_orderad.dto.response.CartRes;
+import com.example.tracking_orderad.entity.*;
+import com.example.tracking_orderad.exception.BadRequestException;
+import com.example.tracking_orderad.exception.NotFoundException;
+import com.example.tracking_orderad.repository.CartItemRepo;
+import com.example.tracking_orderad.repository.CartRepo;
+import com.example.tracking_orderad.repository.ProductVariantRepo;
+import com.example.tracking_orderad.service.CartService;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
+import java.util.Optional;
+
+@Service
+@RequiredArgsConstructor
+@Slf4j
+public class CartServiceImpl implements CartService {
+    private final CartRepo cartRepo;
+    private final CartItemRepo cartItemRepo;
+    private final CartItemMapper cartItemMapper;
+    private final AuthenticationFacade authenticationFacade;
+    private final ProductVariantRepo productVariantRepo;
+
+    @Override
+    @Transactional(readOnly = true)
+    public CartRes getCurrentCart() {
+        // lay cart tu user login
+        User user = authenticationFacade.getCurrentUser();
+        log.info("Getting current cart for user {}", user.getUsername());
+
+        //Lay cart cua user
+        Cart cart = cartRepo.findByUser(user)
+                .orElseThrow(() -> {
+                    log.error("cart not found");
+                    return new NotFoundException(HttpStatus.NOT_FOUND, "Cart not found");
+                });
+
+        // Lay cart item
+        List<CartItem> cartItems = cartItemRepo.findAllByCart(cart);
+        log.info("Found {} cartItems", cartItems.size());
+
+        // convert entity
+        List<CartItemRes> cartItemResList = cartItemMapper.toCartItemList(cartItems);
+
+        // hien thi INSTOCK/LIMITED/OUT OF STOCK
+        for (CartItemRes items : cartItemResList) {
+            Integer quantityInStock = items.getQuantityInStock();
+            if (quantityInStock == null || quantityInStock == 0) {
+                items.setStockStatus(StockStatusEnum.OUT_OF_STOCK.name());
+            } else if (quantityInStock <= 10) {
+                items.setStockStatus(StockStatusEnum.LIMITED_STOCK.name());
+            } else {
+                items.setStockStatus(StockStatusEnum.IN_STOCK.name());
+            }
+        }
+        log.info("Get Current Cart Successfull");
+        return CartRes.builder()
+                .items(cartItemResList)
+                .build();
+    }
+
+    @Transactional
+    @Override
+    public CartRes addToCart(AddToCartReq req) {
+        // lay tu user
+        User user = authenticationFacade.getCurrentUser();
+        log.info("Adding to cart for user {}", user.getUsername());
+
+        // lay cart
+        Cart cart = cartRepo.findByUser(user)
+                .orElseThrow(() -> new NotFoundException(HttpStatus.NOT_FOUND, "Cart not found"));
+
+        //lay ra variant -> check xem co variant do ko
+        ProductVariant productVariant = productVariantRepo.findById(
+                        req.getProductVariantId()) //
+                .orElseThrow(() -> new NotFoundException(HttpStatus.NOT_FOUND, "Product Variant not found"));
+
+        // Check inventory
+        Inventory inventory = productVariant.getInventory();
+        if (inventory == null) {
+            throw new NotFoundException(HttpStatus.NOT_FOUND, "Inventory not found");
+        } else if (inventory.getQuantityInStock() <= 0) {
+            throw new BadRequestException(HttpStatus.BAD_REQUEST, "Inventory is out of stock");
+        }
+
+        // Check xem cartItem existed
+        Optional<CartItem> optionalCartItem = cartItemRepo.findByCartAndProductVariant(cart, productVariant);
+        if (optionalCartItem.isPresent()) { // neu da co trong cart
+            CartItem cartItem = optionalCartItem.get();
+
+            int newQuantity = cartItem.getQuantity() + req.getQuantity(); // newQuantity = quantity(hien tai trong item + quantity truyen vao tu req)
+
+            if (newQuantity > inventory.getQuantityInStock()) {
+                throw new BadRequestException(HttpStatus.BAD_REQUEST, "Not enough stock");
+            }
+
+            cartItem.setQuantity(newQuantity); // update quantity
+            cartItemRepo.save(cartItem);
+            log.info("Updated quantity to {}", newQuantity);
+
+        } else { //Them item moi( chua co trong cart)
+            if (req.getQuantity() > inventory.getQuantityInStock()) {
+                throw new BadRequestException(HttpStatus.BAD_REQUEST, "Not enough stock");
+            }
+
+
+            CartItem cartItem = CartItem.builder()
+                    .cart(cart)
+                    .productVariant(productVariant)
+                    .quantity(req.getQuantity())
+                    .build();
+            cartItemRepo.save(cartItem);
+
+            log.info("Created new cartItem");
+        }
+
+        return getCurrentCart();
+
+    }
+
+    @Override
+    @Transactional
+    public CartRes updateCartItem(UpdateCartReq req) {
+        //lay ra user dang dang nhap
+        User user = authenticationFacade.getCurrentUser();
+
+        // lay cart cua user
+        Cart cart = cartRepo.findByUser(user).orElseThrow(
+                () -> new NotFoundException(HttpStatus.NOT_FOUND, "Cart not found"));
+
+        //lay productVariantId
+        ProductVariant productVariant = productVariantRepo.findById(req.getProductVariantId())
+                .orElseThrow(() ->
+                        new NotFoundException(HttpStatus.NOT_FOUND, "Product Variant not found"));
+
+        //lay cartitem
+        CartItem cartItem = cartItemRepo.findByCartAndProductVariant(cart,productVariant)
+                .orElseThrow(() ->
+                        new NotFoundException(HttpStatus.NOT_FOUND, " CartItem not found"));
+
+        // check quantity - inventory
+        if(req.getQuantity() == 0){
+            cartItemRepo.delete(cartItem);
+            log.info("Removed: {}", productVariant.getId());
+        }
+        else{
+            Inventory inventory = productVariant.getInventory();
+            if (inventory == null) {
+                throw new NotFoundException(HttpStatus.NOT_FOUND, "Inventory not found");
+            }
+            if (req.getQuantity() > inventory.getQuantityInStock()) {
+                throw new BadRequestException(HttpStatus.BAD_REQUEST, "Not enough stock");
+            }
+
+            cartItem.setQuantity(req.getQuantity());
+            cartItemRepo.save(cartItem);
+            log.info("Update ProductVariant: {} to {}",productVariant.getId(),req.getQuantity());
+        }
+        return getCurrentCart();
+
+
+    }
+}

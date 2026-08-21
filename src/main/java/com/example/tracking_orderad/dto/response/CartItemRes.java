@@ -1,0 +1,20 @@
+package com.example.tracking_orderad.dto.response;
+
+import lombok.*;
+
+import java.math.BigDecimal;
+
+@Getter
+@Setter
+@AllArgsConstructor
+@NoArgsConstructor
+@Builder
+public class CartItemRes {
+    private String productVariantId;
+    private String productName;
+    private String sku;
+    private BigDecimal price; // lấy từ CartItem.priceSnapshot
+    private Integer quantity;
+    private String stockStatus; // inventory
+    private Integer quantityInStock;
+}

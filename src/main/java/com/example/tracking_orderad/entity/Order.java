@@ -1,0 +1,73 @@
+package com.example.tracking_orderad.entity;
+
+import com.example.tracking_orderad.common.OrderStatusEnum;
+import com.example.tracking_orderad.common.PaymentType;
+import jakarta.persistence.*;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import org.hibernate.annotations.UuidGenerator;
+
+import java.math.BigDecimal;
+import java.util.Date;
+import java.util.List;
+
+@Entity
+@Getter
+@Setter
+@AllArgsConstructor
+@NoArgsConstructor
+@Table(name = "Orders")
+public class Order extends BaseEntity {
+    @Id
+    @UuidGenerator
+    @Column(name = "id", length = 36)
+    private String id;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id")
+    private User user;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "address_id")
+    private UserAddress address;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "carrier_id")
+    private Carrier carrier;
+
+    @Column(name = "tracking_number")
+    private String trackingNumber;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status")
+    private OrderStatusEnum status;
+
+    @Column(name = "subtotal")
+    private BigDecimal subtotal;
+
+    @Column(name = "discount_amount")
+    private BigDecimal discountAmount;
+
+    @Column(name = "shipping_fee")
+    private BigDecimal shippingFee;
+
+    @Column(name = "grand_total")
+    private BigDecimal grandTotal;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "payment_type")
+    private PaymentType paymentType;
+
+    @Column(name = "estimated_delivery_date")
+    private Date estimatedDeliveryDate;
+
+    @OneToMany(mappedBy = "order")
+    private List<OrderItem> orderItems;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "shipper_id")
+    private Shipper shipper;
+
+}

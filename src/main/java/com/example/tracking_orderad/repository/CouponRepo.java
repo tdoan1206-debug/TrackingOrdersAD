@@ -1,0 +1,28 @@
+package com.example.tracking_orderad.repository;
+
+import com.example.tracking_orderad.entity.Coupon;
+import jakarta.persistence.LockModeType;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+
+import java.util.Optional;
+
+public interface CouponRepo extends JpaRepository<Coupon, String> {
+    // Dùng trong write transaction (increaseUsedCount)
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    Optional<Coupon> findByCode(String code);
+
+    // Dùng trong read-only transaction (calculateCoupon / getOrderSummary) - không cần lock
+    @Query("SELECT c FROM Coupon c WHERE c.code = :code")
+    Optional<Coupon> findByCodeReadOnly(@Param("code") String code);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+    SELECT c
+    FROM Coupon c
+    WHERE c.id = :couponId
+""")
+    Optional<Coupon> findByIdForUpdate(@Param("couponId") String couponId);
+}

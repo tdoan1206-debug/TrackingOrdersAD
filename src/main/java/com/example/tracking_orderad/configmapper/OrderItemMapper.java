@@ -1,0 +1,29 @@
+package com.example.tracking_orderad.configmapper;
+
+import com.example.tracking_orderad.dto.response.OrderItemDetailRes;
+import com.example.tracking_orderad.entity.OrderItem;
+import org.mapstruct.Mapper;
+import org.mapstruct.Mapping;
+
+import java.math.BigDecimal;
+import java.util.List;
+
+@Mapper(componentModel = "spring")
+public interface OrderItemMapper {
+    @Mapping(source = "productVariant.id", target = "productVariantId")
+    @Mapping(source = "productVariant.product.id", target = "productId")
+    @Mapping(source = "productVariant.product.name", target = "productName")
+    @Mapping(source = "productVariant.name", target = "variantName")
+    @Mapping(source = "productVariant.sku", target = "sku")
+    @Mapping(source = "quantity", target = "quantity")
+    @Mapping(source = "unitPrice", target = "unitPrice")
+    @Mapping(target = "totalPrice", expression = "java(calculateTotalPrice(orderItem))")
+    OrderItemDetailRes toOrderItemDetailRes(OrderItem orderItem);
+
+    List<OrderItemDetailRes> toOrderItemDetailResList(List<OrderItem> orderItems);
+
+    default BigDecimal calculateTotalPrice(OrderItem orderItem) {
+        return orderItem.getUnitPrice()
+                .multiply(BigDecimal.valueOf(orderItem.getQuantity()));
+    }
+}
