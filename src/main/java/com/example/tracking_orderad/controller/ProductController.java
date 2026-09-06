@@ -1,16 +1,19 @@
 package com.example.tracking_orderad.controller;
 
+import com.example.tracking_orderad.dto.request.CreateProductRequest;
+import com.example.tracking_orderad.dto.request.CreateVariantRequest;
+import com.example.tracking_orderad.dto.response.CreateProductResponse;
+import com.example.tracking_orderad.dto.response.CreateVariantResponse;
 import com.example.tracking_orderad.dto.response.ProductDetailRes;
 import com.example.tracking_orderad.dto.response.ProductRes;
 import com.example.tracking_orderad.service.ProductService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
+import java.security.Principal;
 import java.util.List;
 
 @RestController
@@ -36,5 +39,23 @@ public class ProductController {
     public ResponseEntity<ProductDetailRes> getById(@PathVariable String id) {
         return ResponseEntity.ok(productService.getById(id));
     }
+
+    @PostMapping
+    @PreAuthorize("hasRole('SELLER')")
+    public ResponseEntity<CreateProductResponse> createProduct(@Valid @RequestBody CreateProductRequest request) {
+
+        CreateProductResponse response = productService.createProduct(request);
+        return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/variants")
+    @PreAuthorize("hasRole('SELLER')")
+    public ResponseEntity<CreateVariantResponse> createVariant(@Valid @RequestBody CreateVariantRequest request) {
+
+        CreateVariantResponse response = productService.createVariant(request);
+        return ResponseEntity.ok(response);
+    }
+
+
 
 }

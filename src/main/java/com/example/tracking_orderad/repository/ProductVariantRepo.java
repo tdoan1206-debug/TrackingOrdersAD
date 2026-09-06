@@ -20,4 +20,14 @@ public interface ProductVariantRepo extends JpaRepository<ProductVariant, String
     List<ProductVariant> findAllByIds(@Param("ids") List<String> ids);
 
     Optional<ProductVariant> findById(String id);
+
+    @Query("""
+                SELECT pv.sku
+                FROM ProductVariant pv
+                WHERE pv.sku IN :skus
+                
+            """)
+    List<String> findExistingSkus(List<String> skus);
+
+    boolean existsBySku(String sku);
 }

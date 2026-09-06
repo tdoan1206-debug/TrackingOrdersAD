@@ -19,7 +19,7 @@ import java.util.List;
 public class UserController {
 
     private final UserService userService;
-
+//OK
     @PostMapping("/register")
     public ResponseEntity<UserProfileRes> register(@RequestBody @Valid RegisterReq req) {
         return ResponseEntity.ok(userService.register(req));
@@ -29,6 +29,7 @@ public class UserController {
      * Lấy thông tin người dùng hiện tại (current user).
      * Mọi role đều có thể gọi API này để biết mình là ai.
      */
+    //OK
     @GetMapping("/me")
     @PreAuthorize("hasAnyRole('BUYER', 'SELLER', 'SHIPPER')")
     public ResponseEntity<UserProfileRes> getMyProfile() {
@@ -47,6 +48,7 @@ public class UserController {
     /**
      * Thêm địa chỉ mới cho người mua.
      */
+    //OK
     @PostMapping("/me/addresses")
     @PreAuthorize("hasRole('BUYER')")
     public ResponseEntity<UserAddressRes> addAddress(@RequestBody @Valid CreateUserAddressReq req) {
@@ -56,6 +58,7 @@ public class UserController {
     /**
      * Xóa địa chỉ của người mua.
      */
+    //OK
     @DeleteMapping("/me/addresses/{addressId}")
     @PreAuthorize("hasRole('BUYER')")
     public ResponseEntity<Void> deleteAddress(@PathVariable String addressId) {

@@ -32,6 +32,17 @@ public class RestExceptionHandler extends ResponseEntityExceptionHandler {
         return new ResponseEntity<>(errorResponse, exception.getStatus());
     }
 
+    @ExceptionHandler(BusinessException.class)
+    public ResponseEntity<ErrorRes> handleBusinessException(BusinessException ex) {
+
+        ErrorRes error = new ErrorRes();
+
+        error.setCode(ex.getStatus().value());
+        error.setMessage(ex.getMessage());
+
+        return ResponseEntity.status(ex.getStatus()).body(error);
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorRes> handleAllExceptions(Exception exception) {
 
@@ -75,4 +86,6 @@ public class RestExceptionHandler extends ResponseEntityExceptionHandler {
 
         return new ResponseEntity<>(errorResponse, HttpStatus.BAD_REQUEST);
     }
+
+
 }

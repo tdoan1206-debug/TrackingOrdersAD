@@ -38,14 +38,11 @@ public class CartServiceImpl implements CartService {
     public CartRes getCurrentCart() {
         // lay cart tu user login
         User user = authenticationFacade.getCurrentUser();
-        log.info("Getting current cart for user {}", user.getUsername());
+        log.info("Lấy cart của user {}", user.getUsername());
 
         //Lay cart cua user
         Cart cart = cartRepo.findByUser(user)
-                .orElseThrow(() -> {
-                    log.error("cart not found");
-                    return new NotFoundException(HttpStatus.NOT_FOUND, "Cart not found");
-                });
+                .orElseThrow(() -> new NotFoundException(HttpStatus.NOT_FOUND, "Cart not found"));
 
         // Lay cart item
         List<CartItem> cartItems = cartItemRepo.findAllByCart(cart);
@@ -71,20 +68,19 @@ public class CartServiceImpl implements CartService {
                 .build();
     }
 
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     @Override
     public CartRes addToCart(AddToCartReq req) {
         // lay tu user
         User user = authenticationFacade.getCurrentUser();
-        log.info("Adding to cart for user {}", user.getUsername());
+        log.info("Thêm sản phẩm vào cart của user {}", user.getUsername());
 
         // lay cart
         Cart cart = cartRepo.findByUser(user)
                 .orElseThrow(() -> new NotFoundException(HttpStatus.NOT_FOUND, "Cart not found"));
 
         //lay ra variant -> check xem co variant do ko
-        ProductVariant productVariant = productVariantRepo.findById(
-                        req.getProductVariantId()) //
+        ProductVariant productVariant = productVariantRepo.findById(req.getProductVariantId())
                 .orElseThrow(() -> new NotFoundException(HttpStatus.NOT_FOUND, "Product Variant not found"));
 
         // Check inventory
@@ -100,11 +96,11 @@ public class CartServiceImpl implements CartService {
         if (optionalCartItem.isPresent()) { // neu da co trong cart
             CartItem cartItem = optionalCartItem.get();
 
-            int newQuantity = cartItem.getQuantity() + req.getQuantity(); // newQuantity = quantity(hien tai trong item + quantity truyen vao tu req)
-
-            if (newQuantity > inventory.getQuantityInStock()) {
+            if (inventory.getQuantityInStock() < 1) {
                 throw new BadRequestException(HttpStatus.BAD_REQUEST, "Not enough stock");
             }
+
+            int newQuantity = cartItem.getQuantity() + req.getQuantity(); // newQuantity = quantity(hien tai trong item + quantity truyen vao tu req)
 
             cartItem.setQuantity(newQuantity); // update quantity
             cartItemRepo.save(cartItem);
@@ -112,9 +108,8 @@ public class CartServiceImpl implements CartService {
 
         } else { //Them item moi( chua co trong cart)
             if (req.getQuantity() > inventory.getQuantityInStock()) {
-                throw new BadRequestException(HttpStatus.BAD_REQUEST, "Not enough stock");
+                throw new BadRequestException(HttpStatus.BAD_REQUEST, "Không đủ tồn kho để thêm vào cart");
             }
-
 
             CartItem cartItem = CartItem.builder()
                     .cart(cart)
@@ -131,29 +126,27 @@ public class CartServiceImpl implements CartService {
     }
 
     @Override
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public CartRes updateCartItem(UpdateCartReq req) {
         //lay ra user dang dang nhap
         User user = authenticationFacade.getCurrentUser();
 
         // lay cart cua user
-        Cart cart = cartRepo.findByUser(user).orElseThrow(
-                () -> new NotFoundException(HttpStatus.NOT_FOUND, "Cart not found"));
+        Cart cart = cartRepo.findByUser(user)
+                .orElseThrow(() -> new NotFoundException(HttpStatus.NOT_FOUND, "Cart not found"));
 
         //lay productVariantId
         ProductVariant productVariant = productVariantRepo.findById(req.getProductVariantId())
-                .orElseThrow(() ->
-                        new NotFoundException(HttpStatus.NOT_FOUND, "Product Variant not found"));
+                .orElseThrow(() -> new NotFoundException(HttpStatus.NOT_FOUND, "Product Variant not found"));
 
         //lay cartitem
         CartItem cartItem = cartItemRepo.findByCartAndProductVariant(cart,productVariant)
-                .orElseThrow(() ->
-                        new NotFoundException(HttpStatus.NOT_FOUND, " CartItem not found"));
+                .orElseThrow(() -> new NotFoundException(HttpStatus.NOT_FOUND, " CartItem not found"));
 
         // check quantity - inventory
         if(req.getQuantity() == 0){
             cartItemRepo.delete(cartItem);
-            log.info("Removed: {}", productVariant.getId());
+            log.info("Đã Xóa: {}", productVariant.getId());
         }
         else{
             Inventory inventory = productVariant.getInventory();
@@ -169,7 +162,5 @@ public class CartServiceImpl implements CartService {
             log.info("Update ProductVariant: {} to {}",productVariant.getId(),req.getQuantity());
         }
         return getCurrentCart();
-
-
     }
 }

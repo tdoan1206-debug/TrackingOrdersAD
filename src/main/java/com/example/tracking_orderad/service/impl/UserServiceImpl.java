@@ -16,6 +16,7 @@ import com.example.tracking_orderad.repository.UserAddressRepo;
 import com.example.tracking_orderad.repository.UserRepo;
 import com.example.tracking_orderad.service.UserService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -28,6 +29,7 @@ import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class UserServiceImpl implements UserService {
 
     private final AuthenticationFacade authenticationFacade;
@@ -40,6 +42,7 @@ public class UserServiceImpl implements UserService {
     @Override
     public UserProfileRes getCurrentUserProfile() {
         User user = authenticationFacade.getCurrentUser();
+        log.info("LẤy thông tin người dùng thành công ");
         return UserProfileRes.builder()
                 .id(user.getId())
                 .username(user.getUsername())
@@ -59,13 +62,16 @@ public class UserServiceImpl implements UserService {
     public UserAddressRes addAddress(CreateUserAddressReq req) {
         User user = authenticationFacade.getCurrentUser();
 
-        // Nếu là địa chỉ mặc định, bỏ default của địa chỉ cũ
+        // Nếu là người dùng chọn đây là địa chỉ mặc định, bỏ default của địa chỉ cũ
         if (Boolean.TRUE.equals(req.getIsDefault())) {
+
             Optional<UserAddress> existingDefault = userAddressRepo.findByUserAndIsDefaultTrue(user);
-            existingDefault.ifPresent(addr -> {
+
+            if (existingDefault.isPresent()) {
+                UserAddress addr = existingDefault.get();
                 addr.setIsDefault(false);
                 userAddressRepo.save(addr);
-            });
+            }
         }
 
         UserAddress address = new UserAddress();
@@ -79,6 +85,7 @@ public class UserServiceImpl implements UserService {
         address.setIsDefault(Boolean.TRUE.equals(req.getIsDefault()));
 
         address = userAddressRepo.save(address);
+        log.info("Thêm địa chỉ thành công");
         return userAddressMapper.toUserAddressRes(address);
     }
 
@@ -88,7 +95,9 @@ public class UserServiceImpl implements UserService {
         User user = authenticationFacade.getCurrentUser();
         UserAddress address = userAddressRepo.findByIdAndUser(addressId, user)
                 .orElseThrow(() -> new NotFoundException(HttpStatus.NOT_FOUND, "Address not found"));
-        userAddressRepo.delete(address);
+        address.setDeleted(true);
+        userAddressRepo.save(address);
+        log.info("Xóa địa chỉ thành công, thành công chuyển deleted thành true");
     }
 
     @Override
@@ -97,21 +106,26 @@ public class UserServiceImpl implements UserService {
         User user = authenticationFacade.getCurrentUser();
 
         // Bỏ default của địa chỉ cũ
-        userAddressRepo.findByUserAndIsDefaultTrue(user).ifPresent(addr -> {
+        UserAddress addr = userAddressRepo.findByUserAndIsDefaultTrue(user).orElse(null);
+
+        if (addr != null) {
             addr.setIsDefault(false);
-            userAddressRepo.save(addr);
-        });
+        }
 
         // Set default cho địa chỉ mới
         UserAddress address = userAddressRepo.findByIdAndUser(addressId, user)
                 .orElseThrow(() -> new NotFoundException(HttpStatus.NOT_FOUND, "Address not found"));
         address.setIsDefault(true);
         address = userAddressRepo.save(address);
+        log.info("thiết lập địa chỉ  mặc định thành công");
         return userAddressMapper.toUserAddressRes(address);
     }
+
+
     @Override
     @Transactional(rollbackFor = Exception.class)
     public UserProfileRes register(RegisterReq req) {
+
         if (userRepo.findByUsername(req.getUsername()).isPresent()) {
             throw new BadRequestException(HttpStatus.BAD_REQUEST, "Username already exists");
         }
@@ -127,7 +141,6 @@ public class UserServiceImpl implements UserService {
         } catch (IllegalArgumentException e) {
             throw new BadRequestException(HttpStatus.BAD_REQUEST, "Invalid role");
         }
-
         user = userRepo.save(user);
 
         if (RoleEnum.BUYER.equals(user.getRole())) {

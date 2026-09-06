@@ -7,6 +7,8 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.hibernate.annotations.UuidGenerator;
 
+import java.util.List;
+
 @Entity
 @Getter
 @Setter
@@ -23,8 +25,6 @@ public class Cart extends BaseEntity {
     @JoinColumn(name = "user_id")
     private User user;
 
-
-
-
-
+    @OneToMany(mappedBy = "cart")
+    private List<CartItem> cartItemsList ;
 }
