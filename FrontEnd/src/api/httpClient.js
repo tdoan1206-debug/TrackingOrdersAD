@@ -31,9 +31,15 @@ async function parseResponse(response) {
 }
 
 export async function apiRequest(path, options = {}) {
+  let body = options.body;
+  if (body && typeof body === "object" && !(body instanceof FormData) && !(body instanceof Blob)) {
+    body = JSON.stringify(body);
+  }
+
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...options,
-    headers: buildHeaders(options),
+    body,
+    headers: buildHeaders({ ...options, body }),
   });
 
   const data = await parseResponse(response);

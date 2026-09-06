@@ -14,6 +14,7 @@ import { ShipperOrderDetailPage } from "../pages/ShipperOrderDetailPage.jsx";
 import { ShipperProfilePage } from "../pages/ShipperProfilePage.jsx";
 import { ReturnsManagementPage } from "../pages/ReturnsManagementPage.jsx";
 import { InventoryPage } from "../pages/InventoryPage.jsx";
+import { SellerProductsPage } from "../pages/SellerProductsPage.jsx";
 import { getStoredCredentials } from "../services/authStorage.js";
 import { AppLayout } from "../layouts/AppLayout.jsx";
 
@@ -50,6 +51,7 @@ export function AppRoutes() {
       <Route path="/seller/orders/:orderId" element={<Guarded><SellerOrderDetailPage /></Guarded>} />
       <Route path="/seller/returns" element={<Guarded><ReturnsManagementPage /></Guarded>} />
       <Route path="/seller/inventory" element={<Guarded><InventoryPage /></Guarded>} />
+      <Route path="/seller/products" element={<Guarded><SellerProductsPage /></Guarded>} />
 
       {/* SHIPPER */}
       <Route path="/shipper/orders" element={<Guarded><ShipperOrdersPage /></Guarded>} />

@@ -8,10 +8,13 @@ import java.util.List;
 import java.util.Optional;
 
 public interface ProductRepo extends JpaRepository<Product, String> {
+
     @Query("""
-    SELECT p
+    SELECT DISTINCT p
     FROM Product p
     JOIN FETCH p.productCategory
+    LEFT JOIN FETCH p.productVariants pv
+    LEFT JOIN FETCH pv.inventory
     """)
     List<Product> findAllProduct();
 

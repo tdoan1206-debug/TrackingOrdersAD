@@ -5,10 +5,7 @@ import com.example.tracking_orderad.configmapper.ProductMapper;
 import com.example.tracking_orderad.configmapper.ProductVariantMapper;
 import com.example.tracking_orderad.dto.request.CreateProductRequest;
 import com.example.tracking_orderad.dto.request.CreateVariantRequest;
-import com.example.tracking_orderad.dto.response.CreateProductResponse;
-import com.example.tracking_orderad.dto.response.CreateVariantResponse;
-import com.example.tracking_orderad.dto.response.ProductDetailRes;
-import com.example.tracking_orderad.dto.response.ProductRes;
+import com.example.tracking_orderad.dto.response.*;
 import com.example.tracking_orderad.entity.*;
 import com.example.tracking_orderad.exception.BusinessException;
 import com.example.tracking_orderad.exception.NotFoundException;
@@ -77,6 +74,7 @@ public class ProductServiceImpl implements ProductService {
     }
 
     @Override
+    @Transactional
     public CreateProductResponse createProduct(CreateProductRequest request) {
         ProductCategory cat = productCategoryRepo.findById(request.getCategoryId())
                 .orElseThrow(() -> new NotFoundException(HttpStatus.BAD_REQUEST, "Danh mục không tồn tại"));
@@ -101,6 +99,7 @@ public class ProductServiceImpl implements ProductService {
     }
 
     @Override
+    @Transactional
     public CreateVariantResponse createVariant(CreateVariantRequest request) {
         // Kiểm tra product
         Product product = productRepo.findById(request.getProductId())
@@ -137,5 +136,22 @@ public class ProductServiceImpl implements ProductService {
 
         log.info("Tạo thành công variant");
         return createVariantResponse ;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ProductCategoryRes> getCategories() {
+        List<ProductCategory> categories = productCategoryRepo.findAll();
+
+        List<ProductCategoryRes> result = new ArrayList<>();
+
+        for (ProductCategory category : categories) {
+            ProductCategoryRes res = new ProductCategoryRes();
+            res.setId(category.getId());
+            res.setName(category.getName());
+            result.add(res);
+        }
+
+        return result;
     }
 }

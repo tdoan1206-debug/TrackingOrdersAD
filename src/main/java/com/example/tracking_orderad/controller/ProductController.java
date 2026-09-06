@@ -2,11 +2,9 @@ package com.example.tracking_orderad.controller;
 
 import com.example.tracking_orderad.dto.request.CreateProductRequest;
 import com.example.tracking_orderad.dto.request.CreateVariantRequest;
-import com.example.tracking_orderad.dto.response.CreateProductResponse;
-import com.example.tracking_orderad.dto.response.CreateVariantResponse;
-import com.example.tracking_orderad.dto.response.ProductDetailRes;
-import com.example.tracking_orderad.dto.response.ProductRes;
+import com.example.tracking_orderad.dto.response.*;
 import com.example.tracking_orderad.service.ProductService;
+import com.example.tracking_orderad.entity.ProductCategory;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -34,6 +32,12 @@ public class ProductController {
         return ResponseEntity.ok(productService.getAllAdmin());
     }
 
+    @GetMapping("/categories")
+    @PreAuthorize("hasAnyRole('BUYER', 'SELLER')")
+    public ResponseEntity<List<ProductCategoryRes>> getCategories() {
+        return ResponseEntity.ok(productService.getCategories());
+    }
+
     @GetMapping("/{id}")
     @PreAuthorize("hasAnyRole('BUYER', 'SELLER')")
     public ResponseEntity<ProductDetailRes> getById(@PathVariable String id) {
@@ -55,6 +59,7 @@ public class ProductController {
         CreateVariantResponse response = productService.createVariant(request);
         return ResponseEntity.ok(response);
     }
+    // tất cả là tôi
 
 
 
