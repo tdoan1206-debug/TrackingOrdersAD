@@ -11,12 +11,12 @@ import java.util.Optional;
 public interface ProductVariantRepo extends JpaRepository<ProductVariant, String> {
 
     @Query("""
-    SELECT DISTINCT pv
-    FROM ProductVariant pv
-    JOIN FETCH pv.product p
-    LEFT JOIN FETCH pv.inventory i
-    WHERE pv.id IN :ids
-    """)
+            SELECT DISTINCT pv
+            FROM ProductVariant pv
+            JOIN FETCH pv.product p
+            LEFT JOIN FETCH pv.inventory i
+            WHERE pv.id IN :ids
+            """)
     List<ProductVariant> findAllByIds(@Param("ids") List<String> ids);
 
     Optional<ProductVariant> findById(String id);
@@ -24,10 +24,10 @@ public interface ProductVariantRepo extends JpaRepository<ProductVariant, String
     @Query("""
                 SELECT pv.sku
                 FROM ProductVariant pv
-                WHERE pv.sku IN :skus
-                
+                WHERE pv.sku = :sku
+            
             """)
-    List<String> findExistingSkus(List<String> skus);
+    String findExistingSku(String sku);
 
     boolean existsBySku(String sku);
 }

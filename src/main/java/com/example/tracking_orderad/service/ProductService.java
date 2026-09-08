@@ -2,6 +2,7 @@ package com.example.tracking_orderad.service;
 
 import com.example.tracking_orderad.dto.request.CreateProductRequest;
 import com.example.tracking_orderad.dto.request.CreateVariantRequest;
+import com.example.tracking_orderad.dto.request.UpdateProductRequest;
 import com.example.tracking_orderad.dto.response.*;
 
 import com.example.tracking_orderad.entity.ProductCategory;
@@ -19,4 +20,6 @@ public interface ProductService {
     CreateVariantResponse createVariant(CreateVariantRequest request) ;
 
     List<ProductCategoryRes> getCategories();
+
+    void update(UpdateProductRequest request , String productId ) ;
 }

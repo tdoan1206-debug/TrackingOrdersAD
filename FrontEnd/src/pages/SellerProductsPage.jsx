@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { apiRequest } from "../api/httpClient.js";
 import { AdminLayout } from "../layouts/AdminLayout.jsx";
-import { Package, Plus, Layers, Search, CheckCircle2, AlertCircle, ArrowLeft, RefreshCw, Box } from "lucide-react";
+import { Package, Plus, Layers, Search, CheckCircle2, AlertCircle, ArrowLeft, RefreshCw, Box, Pencil, X, Save } from "lucide-react";
 import { getImageForProduct } from "../utils/imageMapper.js";
 
 export function SellerProductsPage() {
@@ -37,6 +37,116 @@ export function SellerProductsPage() {
   const [variantSubmitting, setVariantSubmitting] = useState(false);
   const [variantSuccess, setVariantSuccess] = useState(null);
   const [variantError, setVariantError] = useState("");
+
+  // Edit Product Modal states
+  const [editingProduct, setEditingProduct] = useState(null);
+  const [editForm, setEditForm] = useState({
+    productName: "",
+    basePrice: "",
+    description: "",
+    weightGram: "",
+    categoryId: "",
+    variants: []
+  });
+  const [editSubmitting, setEditSubmitting] = useState(false);
+  const [editSuccess, setEditSuccess] = useState("");
+  const [editError, setEditError] = useState("");
+
+  // Open Edit Product Modal
+  const handleOpenEditModal = (product) => {
+    const matchedCategory = categories.find(c => c.name === product.categoryName || c.id === product.categoryId);
+    const catId = matchedCategory ? matchedCategory.id : (categories[0]?.id || "");
+
+    setEditingProduct(product);
+    setEditSuccess("");
+    setEditError("");
+    setEditForm({
+      productName: product.productName || "",
+      basePrice: product.basePrice !== undefined ? String(product.basePrice) : "",
+      description: product.description || "",
+      weightGram: product.weightGram !== undefined ? String(product.weightGram) : "500",
+      categoryId: catId,
+      variants: (product.variants || []).map(v => ({
+        variantId: v.id || v.variantId || "",
+        variantName: v.name || v.variantName || "",
+        sku: v.sku || "",
+        priceModifier: v.priceModifier !== undefined ? String(v.priceModifier) : "0",
+        quantityInStock: v.quantityInStock !== undefined ? String(v.quantityInStock) : "0"
+      }))
+    });
+  };
+
+  const handleCloseEditModal = () => {
+    setEditingProduct(null);
+    setEditSuccess("");
+    setEditError("");
+  };
+
+  const handleEditVariantChange = (index, field, value) => {
+    setEditForm(prev => {
+      const newVariants = [...prev.variants];
+      newVariants[index] = { ...newVariants[index], [field]: value };
+      return { ...prev, variants: newVariants };
+    });
+  };
+
+  // Submit Update Product (PUT /api/v1/products/{productId})
+  const handleUpdateProduct = async (e) => {
+    e.preventDefault();
+    if (!editingProduct) return;
+
+    setEditSubmitting(true);
+    setEditError("");
+    setEditSuccess("");
+
+    if (!editForm.productName.trim()) {
+      setEditError("Tên sản phẩm không được trống.");
+      setEditSubmitting(false);
+      return;
+    }
+    if (editForm.basePrice === "" || Number(editForm.basePrice) < 0) {
+      setEditError("Giá gốc phải lớn hơn hoặc bằng 0.");
+      setEditSubmitting(false);
+      return;
+    }
+    if (!editForm.categoryId) {
+      setEditError("Vui lòng chọn danh mục.");
+      setEditSubmitting(false);
+      return;
+    }
+
+    try {
+      const payload = {
+        productName: editForm.productName.trim(),
+        basePrice: Number(editForm.basePrice),
+        description: editForm.description ? editForm.description.trim() : "",
+        weightGram: Number(editForm.weightGram || 0),
+        categoryId: editForm.categoryId,
+        variants: editForm.variants.map(v => ({
+          variantId: v.variantId,
+          variantName: v.variantName ? v.variantName.trim() : "",
+          sku: v.sku ? v.sku.trim() : "",
+          priceModifier: Number(v.priceModifier || 0),
+          quantityInStock: Number(v.quantityInStock || 0)
+        }))
+      };
+
+      await apiRequest(`/api/v1/products/${editingProduct.productId}`, {
+        method: "PUT",
+        body: JSON.stringify(payload)
+      });
+
+      setEditSuccess("Cập nhật sản phẩm thành công!");
+      fetchData();
+      setTimeout(() => {
+        handleCloseEditModal();
+      }, 1200);
+    } catch (err) {
+      setEditError(err.message || "Lỗi khi cập nhật sản phẩm.");
+    } finally {
+      setEditSubmitting(false);
+    }
+  };
 
   // Load data
   const fetchData = async () => {
@@ -351,12 +461,21 @@ export function SellerProductsPage() {
                               </div>
                             </td>
                             <td className="p-4 text-right pr-6">
-                              <button
-                                onClick={() => handleOpenAddVariant(product.productId)}
-                                className="px-3 py-1.5 bg-slate-100 hover:bg-[#0d47a1] hover:text-white text-slate-700 rounded-lg text-xs font-bold border border-slate-200 transition inline-flex items-center gap-1.5 shadow-sm"
-                              >
-                                <Plus size={14} /> Thêm biến thể
-                              </button>
+                              <div className="flex items-center justify-end gap-2">
+                                <button
+                                  onClick={() => handleOpenEditModal(product)}
+                                  className="px-3 py-1.5 bg-amber-50 hover:bg-amber-600 hover:text-white text-amber-700 rounded-lg text-xs font-bold border border-amber-200 transition inline-flex items-center gap-1.5 shadow-sm"
+                                  title="Chỉnh sửa sản phẩm"
+                                >
+                                  <Pencil size={14} /> Sửa
+                                </button>
+                                <button
+                                  onClick={() => handleOpenAddVariant(product.productId)}
+                                  className="px-3 py-1.5 bg-slate-100 hover:bg-[#0d47a1] hover:text-white text-slate-700 rounded-lg text-xs font-bold border border-slate-200 transition inline-flex items-center gap-1.5 shadow-sm"
+                                >
+                                  <Plus size={14} /> Thêm biến thể
+                                </button>
+                              </div>
                             </td>
                           </tr>
                         );
@@ -654,7 +773,7 @@ export function SellerProductsPage() {
                     onChange={(e) => setVariantForm({ ...variantForm, priceModifier: e.target.value })}
                     className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm font-medium focus:outline-none focus:border-[#0d47a1] focus:ring-1 focus:ring-[#0d47a1]"
                   />
-                  <p className="text-[11px] text-slate-400 mt-1">Ví dụ: Giá gốc 100k, nhập 20000 -> Giá biến thể = 120k</p>
+                  <p className="text-[11px] text-slate-400 mt-1">Ví dụ: Giá gốc 100k, nhập 20000 &rarr; Giá biến thể = 120k</p>
                 </div>
 
                 <div>
@@ -686,6 +805,204 @@ export function SellerProductsPage() {
                   className="px-8 py-3 bg-[#0d47a1] hover:bg-blue-800 text-white rounded-xl text-sm font-bold shadow-lg shadow-blue-900/20 transition disabled:opacity-50 flex items-center gap-2"
                 >
                   {variantSubmitting ? "Đang xử lý..." : "Lưu Biến Thể"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+      {/* EDIT PRODUCT MODAL */}
+      {editingProduct && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white border border-slate-200 rounded-3xl p-6 md:p-8 shadow-2xl max-w-3xl w-full my-8 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-4 mb-6 border-b border-slate-100 sticky top-0 bg-white z-10">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-amber-100 text-amber-700 rounded-2xl">
+                  <Pencil size={20} />
+                </div>
+                <div>
+                  <h3 className="text-xl font-black text-slate-900">Sửa Sản Phẩm</h3>
+                  <p className="text-xs text-slate-500 font-mono">ID: {editingProduct.productId}</p>
+                </div>
+              </div>
+              <button
+                onClick={handleCloseEditModal}
+                className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {editSuccess && (
+              <div className="mb-6 p-4 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-center gap-3 text-emerald-700 text-sm font-bold">
+                <CheckCircle2 size={20} className="shrink-0 text-emerald-600" />
+                <span>{editSuccess}</span>
+              </div>
+            )}
+
+            {editError && (
+              <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-2xl flex items-center gap-3 text-red-700 text-sm font-medium">
+                <AlertCircle size={20} className="shrink-0 text-red-500" />
+                <span>{editError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleUpdateProduct} className="space-y-6">
+              {/* Basic Details */}
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-2">
+                  Tên sản phẩm <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={editForm.productName}
+                  onChange={(e) => setEditForm({ ...editForm, productName: e.target.value })}
+                  className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm font-medium focus:outline-none focus:border-[#0d47a1] focus:ring-1 focus:ring-[#0d47a1]"
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-2">
+                    Giá gốc (VNĐ) <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="1000"
+                    value={editForm.basePrice}
+                    onChange={(e) => setEditForm({ ...editForm, basePrice: e.target.value })}
+                    className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm font-medium focus:outline-none focus:border-[#0d47a1] focus:ring-1 focus:ring-[#0d47a1]"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-2">
+                    Danh mục <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={editForm.categoryId}
+                    onChange={(e) => setEditForm({ ...editForm, categoryId: e.target.value })}
+                    className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm font-medium focus:outline-none focus:border-[#0d47a1] focus:ring-1 focus:ring-[#0d47a1] bg-white"
+                    required
+                  >
+                    <option value="">-- Chọn danh mục --</option>
+                    {categories.map((cat) => (
+                      <option key={cat.id} value={cat.id}>
+                        {cat.name} ({cat.id})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-2">
+                    Trọng lượng (Gram)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={editForm.weightGram}
+                    onChange={(e) => setEditForm({ ...editForm, weightGram: e.target.value })}
+                    className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm font-medium focus:outline-none focus:border-[#0d47a1] focus:ring-1 focus:ring-[#0d47a1]"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-2">
+                  Mô tả sản phẩm
+                </label>
+                <textarea
+                  rows={3}
+                  value={editForm.description}
+                  onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+                  className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm font-medium focus:outline-none focus:border-[#0d47a1] focus:ring-1 focus:ring-[#0d47a1]"
+                />
+              </div>
+
+              {/* Variants Section */}
+              {editForm.variants.length > 0 && (
+                <div className="border-t border-slate-200 pt-6">
+                  <h4 className="text-sm font-black text-slate-900 mb-3 flex items-center gap-2">
+                    <Layers size={16} className="text-[#0d47a1]" />
+                    Cập nhật các biến thể ({editForm.variants.length})
+                  </h4>
+
+                  <div className="space-y-4">
+                    {editForm.variants.map((v, idx) => (
+                      <div key={v.variantId || idx} className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-3">
+                        <div className="text-xs font-bold text-slate-500 font-mono">
+                          Biến thể #{idx + 1} - ID: {v.variantId}
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+                          <div>
+                            <label className="block text-[11px] font-bold text-slate-600 mb-1">Tên biến thể</label>
+                            <input
+                              type="text"
+                              value={v.variantName}
+                              onChange={(e) => handleEditVariantChange(idx, "variantName", e.target.value)}
+                              placeholder="Màu sắc / Kích thước"
+                              className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs focus:outline-none focus:border-[#0d47a1] bg-white"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[11px] font-bold text-slate-600 mb-1">Mã SKU</label>
+                            <input
+                              type="text"
+                              value={v.sku}
+                              onChange={(e) => handleEditVariantChange(idx, "sku", e.target.value)}
+                              placeholder="Mã SKU"
+                              className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs font-mono focus:outline-none focus:border-[#0d47a1] bg-white"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[11px] font-bold text-slate-600 mb-1">Chênh lệch giá (VNĐ)</label>
+                            <input
+                              type="number"
+                              step="1000"
+                              value={v.priceModifier}
+                              onChange={(e) => handleEditVariantChange(idx, "priceModifier", e.target.value)}
+                              className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs focus:outline-none focus:border-[#0d47a1] bg-white"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[11px] font-bold text-slate-600 mb-1">Số lượng tồn kho</label>
+                            <input
+                              type="number"
+                              min="0"
+                              value={v.quantityInStock}
+                              onChange={(e) => handleEditVariantChange(idx, "quantityInStock", e.target.value)}
+                              className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs focus:outline-none focus:border-[#0d47a1] bg-white font-bold text-[#0d47a1]"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="pt-4 border-t border-slate-100 flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={handleCloseEditModal}
+                  className="px-6 py-2.5 border border-slate-200 text-slate-600 rounded-xl text-sm font-bold hover:bg-slate-50 transition"
+                >
+                  Hủy bỏ
+                </button>
+                <button
+                  type="submit"
+                  disabled={editSubmitting}
+                  className="px-6 py-2.5 bg-[#0d47a1] hover:bg-blue-800 text-white rounded-xl text-sm font-bold shadow-md transition disabled:opacity-50 flex items-center gap-2"
+                >
+                  <Save size={16} />
+                  {editSubmitting ? "Đang lưu..." : "Lưu Thay Đổi"}
                 </button>
               </div>
             </form>

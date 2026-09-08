@@ -5,6 +5,8 @@ import com.example.tracking_orderad.configmapper.ProductMapper;
 import com.example.tracking_orderad.configmapper.ProductVariantMapper;
 import com.example.tracking_orderad.dto.request.CreateProductRequest;
 import com.example.tracking_orderad.dto.request.CreateVariantRequest;
+import com.example.tracking_orderad.dto.request.UpdateProductRequest;
+import com.example.tracking_orderad.dto.request.UpdateVariantRequest;
 import com.example.tracking_orderad.dto.response.*;
 import com.example.tracking_orderad.entity.*;
 import com.example.tracking_orderad.exception.BusinessException;
@@ -62,16 +64,14 @@ public class ProductServiceImpl implements ProductService {
     @Transactional(readOnly = true)
     public ProductDetailRes getById(String id) {
         Product product = productRepo.findProductDetail(id)
-                .orElseThrow(() ->
-                        new NotFoundException(
-                                HttpStatus.NOT_FOUND,
-                                "Product not found"));
+                .orElseThrow(() -> new NotFoundException(HttpStatus.NOT_FOUND, "Product not found"));
 
         ProductDetailRes res = productMapper.toProductDetailRes(product);
         // Gắn danh sách variants vào response để frontend biết productVariantId
         res.setVariants(productVariantMapper.toProductVariantResList(product.getProductVariants()));
         return res;
     }
+
 
     @Override
     @Transactional
@@ -153,5 +153,89 @@ public class ProductServiceImpl implements ProductService {
         }
 
         return result;
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void update(UpdateProductRequest request, String productId) {
+
+        Product product = productRepo.findById(productId)
+                .orElseThrow(() -> new NotFoundException(HttpStatus.NOT_FOUND, "sản phẩm không tồn tại"));
+
+        log.info("Update product  ");
+        //  Update Product
+
+        if (request.getProductName() != null) {
+            product.setName(request.getProductName());
+        }
+
+        if (request.getDescription() != null) {
+            product.setDescription(request.getDescription());
+        }
+
+        if (request.getBasePrice() != null) {
+            product.setBasePrice(request.getBasePrice());
+        }
+
+        if (request.getWeightGram() >= 0) {
+            product.setWeightFromGram(request.getWeightGram());
+        }
+
+        // Update Category
+        if (request.getCategoryId() != null) {
+            ProductCategory category = productCategoryRepo.findById(request.getCategoryId())
+                    .orElseThrow(() -> new NotFoundException(HttpStatus.NOT_FOUND, "Category not found"));
+
+            product.setProductCategory(category);
+        }
+
+        productRepo.save(product);
+
+        log.info("Update các variant của product đó");
+        // Update các Variant
+        if (request.getVariants() != null) {
+
+            for (UpdateVariantRequest variantRequest : request.getVariants()) {
+
+                ProductVariant variant = productVariantRepo.findById(variantRequest.getVariantId())
+                        .orElseThrow(() -> new NotFoundException(HttpStatus.NOT_FOUND, "Variant not found"));
+
+                // Kiểm tra variant có thuộc product đang update không
+                if (!variant.getProduct().getId().equals(productId)) {
+                    throw new RuntimeException("Variant does not belong to this product");
+                }
+
+                if (variantRequest.getVariantName() != null) {
+                    variant.setName(variantRequest.getVariantName());
+                }
+
+                if (variantRequest.getSku() != null) {
+                    variant.setSku(variantRequest.getSku());
+                }
+
+                if (variantRequest.getPriceModifier() != null) {
+                    variant.setPriceModifier(variantRequest.getPriceModifier());
+                }
+
+                // 6. Update Inventory
+                if (variantRequest.getQuantityInStock() != null) {
+
+                    Inventory inventory = variant.getInventory();
+
+                    if (inventory == null) {
+                        inventory = new Inventory();
+                        inventory.setProductVariant(variant);
+                    }
+
+                    inventory.setQuantityInStock(variantRequest.getQuantityInStock());
+
+                    inventoryRepo.save(inventory);
+                }
+
+                productVariantRepo.save(variant);
+            }
+        }
+        log.info("Update xong ");
+
     }
 }

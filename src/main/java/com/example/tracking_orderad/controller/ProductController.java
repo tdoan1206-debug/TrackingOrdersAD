@@ -2,6 +2,7 @@ package com.example.tracking_orderad.controller;
 
 import com.example.tracking_orderad.dto.request.CreateProductRequest;
 import com.example.tracking_orderad.dto.request.CreateVariantRequest;
+import com.example.tracking_orderad.dto.request.UpdateProductRequest;
 import com.example.tracking_orderad.dto.response.*;
 import com.example.tracking_orderad.service.ProductService;
 import com.example.tracking_orderad.entity.ProductCategory;
@@ -59,8 +60,17 @@ public class ProductController {
         CreateVariantResponse response = productService.createVariant(request);
         return ResponseEntity.ok(response);
     }
+
+    @PutMapping("/{productId}")
+    @PreAuthorize("hasRole('SELLER')")
+    public ResponseEntity<String> update(@Valid @RequestBody UpdateProductRequest request,
+                                         @PathVariable String productId) {
+
+        productService.update(request ,productId);
+        return ResponseEntity.ok("Cập Nhật thành công");
+    }
+
+
     // tất cả là tôi
-
-
 
 }
