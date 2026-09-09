@@ -1,15 +1,14 @@
 package com.example.tracking_orderad.service.impl;
 
+import com.example.tracking_orderad.common.DiscountTypeEnum;
 import com.example.tracking_orderad.common.OrderStatusEnum;
 import com.example.tracking_orderad.config.basicauthconfig.AuthenticationFacade;
-import com.example.tracking_orderad.configmapper.OrderMapper;
-import com.example.tracking_orderad.configmapper.SellerOrderDetailMapper;
-import com.example.tracking_orderad.configmapper.SellerOrderMapper;
-import com.example.tracking_orderad.configmapper.TrackingLogMapper;
+import com.example.tracking_orderad.configmapper.*;
 import com.example.tracking_orderad.dto.request.*;
 import com.example.tracking_orderad.dto.response.*;
 import com.example.tracking_orderad.entity.*;
 import com.example.tracking_orderad.exception.BadRequestException;
+import com.example.tracking_orderad.exception.BusinessException;
 import com.example.tracking_orderad.exception.ForbiddenException;
 import com.example.tracking_orderad.exception.NotFoundException;
 import com.example.tracking_orderad.repository.*;
@@ -49,6 +48,7 @@ public class OrderServiceImpl implements OrderService {
     private final TrackingLogMapper trackingLogMapper;
     private final CarrierRepo carrierRepo;
     private final ShipperRepo shipperRepo;
+    private final OrderSummaryMapper orderSummaryMapper ;
 
     // mapping quantity -> variants
     private Map<String, Integer> getQuantityMap(List<OrderSummaryItemReq> items) {
@@ -192,47 +192,161 @@ public class OrderServiceImpl implements OrderService {
     }
 
 
+//    @Override
+//    @Transactional(readOnly = true)
+//    public OrderSummaryRes getOrderSummary(OrderSummaryReq req) {
+//
+//        // Mapping productVariantId -> quantity
+//        Map<String, Integer> quantityMap = getQuantityMap(req.getItems());
+//
+//        // query 1 lan duy nhat
+//        List<String> variantIds = new ArrayList<>();
+//        for (OrderSummaryItemReq item : req.getItems()) {
+//            variantIds.add(item.getProductVariantId());
+//        }
+//        List<ProductVariant> productVariants = productVariantRepo.findAllByIds(variantIds);;
+//
+//        // vlidate variants
+//
+//        if (productVariants.size() != quantityMap.size()) {
+//            throw new NotFoundException(HttpStatus.NOT_FOUND, "One or more product variants do not exist");
+//        }
+//
+//        // ktra ton kho
+//        for (ProductVariant productVariant : productVariants) {
+//
+//            Inventory inventory = productVariant.getInventory();
+//
+//            if (inventory == null) {
+//                throw new NotFoundException(HttpStatus.NOT_FOUND, "Inventory Not Found");
+//            }
+//
+//            Integer quantity = quantityMap.get(productVariant.getId());
+//            //quantityMap.get("A") => A: 2
+//
+//            if (quantity > inventory.getQuantityInStock()) {
+//                throw new BadRequestException(HttpStatus.BAD_REQUEST, "Quantity In Stock Exceeded");
+//            }
+//        }
+//
+//        //subtoal
+//        BigDecimal subtotal = calculateSubtotal(productVariants, quantityMap);
+//
+//        // Tính giảm giá từ coupon
+//        BigDecimal discountAmount = couponService.calculateCoupon(req.getCouponCode(), subtotal);
+//        log.info("Discount Amount: {}, Coupon: {}", discountAmount, req.getCouponCode());
+//
+//        //Ship
+//        BigDecimal shipppingFee = BigDecimal.valueOf(30000);
+//
+//        //grandTotal = subtotal - discountAmount + shippingFee
+//        BigDecimal grandTotal = subtotal
+//                .subtract(discountAmount)
+//                .add(shipppingFee);
+//        log.info("GrandTotal items: {}", grandTotal);
+//
+//
+//        return OrderSummaryRes.builder()
+//                .subtotal(subtotal)
+//                .discountAmount(discountAmount)
+//                .shippingFee(shipppingFee)
+//                .grandTotal(grandTotal)
+//                .build();
+//    }
+
     @Override
     @Transactional(readOnly = true)
-    public OrderSummaryRes getOrderSummary(OrderSummaryReq req) {
+    public OrderSummaryRes getOrderSummary(OrderSummaryReq req){
+        User user = authenticationFacade.getCurrentUser();
 
-        // Mapping productVariantId -> quantity
-        Map<String, Integer> quantityMap = getQuantityMap(req.getItems());
+        // 1. Kiểm tra danh sách sản phẩm được chọn
+        if (req.getItems() == null || req.getItems().isEmpty()) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "Vui lòng chọn ít nhất một sản phẩm");
+        }
 
-        // query 1 lan duy nhat
-        List<ProductVariant> productVariants = loadProductVariants(req.getItems());
+        // 2. Lấy productVariantId của các sản phẩm được tick
+        List<String> productVariantIds = new ArrayList<>();
 
-        // vlidate variants
-        validateProductVariantsExist(productVariants, quantityMap);
+        for (OrderSummaryItemReq item : req.getItems()) {
+            productVariantIds.add(item.getProductVariantId());
+        }
 
+        // 3. Lấy các sản phẩm được chọn trong Cart của user
+        List<CartItem> cartItemsList = cartItemRepo.findByProductVariantIdInAndUserName(productVariantIds, user.getUsername());
 
-        // ktra ton kho
-        validateInventory(productVariants, quantityMap);
+        // 4. Kiểm tra tất cả sản phẩm được chọn có thuộc Cart không
+        if (cartItemsList.size() != productVariantIds.size()) {
+            throw new BusinessException(HttpStatus.FORBIDDEN, "Có sản phẩm không thuộc giỏ hàng");
+        }
 
-        //subtoal
-        BigDecimal subtotal = calculateSubtotal(productVariants, quantityMap);
+        // 5. Map productVariantId -> CartItems
+        Map<String, CartItem> cartItemMap = new HashMap<>();
 
-        // Tính giảm giá từ coupon
-        BigDecimal discountAmount = couponService.calculateCoupon(req.getCouponCode(), subtotal);
-        log.info("Discount Amount: {}, Coupon: {}", discountAmount, req.getCouponCode());
+        for (CartItem cartItem : cartItemsList) {
+            cartItemMap.put(cartItem.getProductVariant().getId(), cartItem);
+        }
 
-        //Ship
-        BigDecimal shipppingFee = BigDecimal.valueOf(30000);
+        // 6. Tính subtotal CHỈ những sản phẩm được tick
+        BigDecimal subTotal = BigDecimal.ZERO;
 
-        //grandTotal = subtotal - discountAmount + shippingFee
-        BigDecimal grandTotal = subtotal
-                .subtract(discountAmount)
-                .add(shipppingFee);
-        log.info("GrandTotal items: {}", grandTotal);
+        for (OrderSummaryItemReq item : req.getItems()) {
 
+            CartItem cartItem = cartItemMap.get(item.getProductVariantId());
 
-        return OrderSummaryRes.builder()
-                .subtotal(subtotal)
-                .discountAmount(discountAmount)
-                .shippingFee(shipppingFee)
-                .grandTotal(grandTotal)
-                .build();
+            if (cartItem == null) {
+                throw new NotFoundException(HttpStatus.BAD_REQUEST, "Sản phẩm không tồn tại trong giỏ hàng");
+            }
+
+            // Kiểm tra quantity frontend gửi lên có khớp Cart không
+            if (!cartItem.getQuantity().equals(item.getQuantity())) {
+                throw new BusinessException(HttpStatus.BAD_REQUEST, "Số lượng sản phẩm đã thay đổi, hãy nhập đúng");
+            }
+
+            ProductVariant variant = cartItem.getProductVariant();
+
+            // basePrice + priceModifier
+            BigDecimal basePrice = variant.getProduct().getBasePrice();
+            BigDecimal priceModifier = variant.getPriceModifier();
+
+            BigDecimal finalPrice = basePrice.add(priceModifier);
+
+            BigDecimal itemTotal = finalPrice.multiply(BigDecimal.valueOf(cartItem.getQuantity()));
+
+            subTotal = subTotal.add(itemTotal);
+        }
+
+        // 7  Discount
+        BigDecimal discountValue = BigDecimal.ZERO;
+
+        if (req.getCouponCode() != null && !req.getCouponCode().isBlank()) {
+
+            CouponsResponse coupons = couponService.validateCoupon(req.getCouponCode());
+
+            if (coupons.getCouponType() == DiscountTypeEnum.PERCENT) {
+
+                discountValue = subTotal.multiply(coupons.getValue()).divide(BigDecimal.valueOf(100));
+
+            } else {
+                discountValue = coupons.getValue();
+            }
+
+            // Không cho discount > subtotal
+            if (discountValue.compareTo(subTotal) > 0) {
+                discountValue = subTotal;
+            }
+        }
+
+        // 6. Shipping
+        BigDecimal shippingFee = new BigDecimal("30000");
+
+        // 7. Total
+        BigDecimal grandTotal = subTotal.subtract(discountValue).add(shippingFee);
+
+        // 8. Response
+        return orderSummaryMapper.toResponse(subTotal, discountValue, shippingFee, grandTotal);
+
     }
+
 
     @Transactional(rollbackFor = Exception.class)
     @Override
@@ -250,8 +364,7 @@ public class OrderServiceImpl implements OrderService {
         Map<String, Integer> quantityMap = getQuantityMap(req.getItems());
 
         // Query product
-        List<ProductVariant> productVariants =
-                loadProductVariants(req.getItems());
+        List<ProductVariant> productVariants = loadProductVariants(req.getItems());
 
         //validate variants
         validateProductVariantsExist(productVariants, quantityMap);
@@ -913,22 +1026,14 @@ public class OrderServiceImpl implements OrderService {
 
         // shipper
         Shipper shipper = shipperRepo.findByUser(user)
-                .orElseThrow(() ->
-                        new NotFoundException(
-                                HttpStatus.NOT_FOUND,
-                                "Shipper not found"));
+                .orElseThrow(() -> new NotFoundException(HttpStatus.NOT_FOUND, "Shipper not found"));
 
 
-        Pageable pageable = PageRequest.of(
-                pageNumber - 1,
-                pageSize,
-                Sort.by("createdAt").descending());
+        Pageable pageable = PageRequest.of(pageNumber - 1, pageSize, Sort.by("createdAt").descending());
 
         Page<Order> orders = orderRepo.findByShipper(shipper, pageable);
 
-        log.info("Shipper {} has {} orders",
-                user.getUsername(),
-                orders.getTotalElements());
+        log.info("Shipper {} has {} orders", user.getUsername(), orders.getTotalElements());
 
         if (orders.isEmpty()) {
             return Page.empty(pageable);

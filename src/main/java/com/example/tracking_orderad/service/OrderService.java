@@ -8,6 +8,8 @@ import java.util.List;
 
 public interface OrderService {
     //OrderSummary
+//    OrderSummaryRes getOrderSummary(OrderSummaryReq req);
+
     OrderSummaryRes getOrderSummary(OrderSummaryReq req);
 
     //PlaceOrder

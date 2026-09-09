@@ -21,7 +21,7 @@ public class Shipper extends BaseEntity{
     private String id;
 
     @OneToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "user_id")
+    @JoinColumn(name = "user_id", unique = true)
     private User user;
 
     @ManyToOne(fetch = FetchType.LAZY)
@@ -31,6 +31,4 @@ public class Shipper extends BaseEntity{
     @Column(name = "status")
     @Enumerated(EnumType.STRING)
     private StatusShipperEnum status;
-
-
 }

@@ -51,8 +51,5 @@ public interface OrderRepo extends JpaRepository<Order, String> {
 
     Page<Order> findAllByOrderByCreatedAtDesc(Pageable pageable);
 
-    Page<Order> findByShipper(
-            Shipper shipper,
-            Pageable pageable
-    );
+    Page<Order> findByShipper(Shipper shipper, Pageable pageable);
 }

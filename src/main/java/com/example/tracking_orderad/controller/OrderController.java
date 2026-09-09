@@ -26,6 +26,14 @@ public class OrderController {
     private final OrderService orderService;
     private final TrackingLogService trackingLogService;
 
+
+//    @PostMapping("/summary")
+//    @PreAuthorize("hasRole('BUYER')")
+//    public ResponseEntity<OrderSummaryRes> getOrderSummary(@Valid @RequestBody OrderSummaryReq req) {
+//        OrderSummaryRes orderSummary = orderService.getOrderSummary(req);
+//        return ResponseEntity.ok(orderSummary);
+//    }
+
     @PostMapping("/summary")
     @PreAuthorize("hasRole('BUYER')")
     public ResponseEntity<OrderSummaryRes> getOrderSummary(@Valid @RequestBody OrderSummaryReq req) {

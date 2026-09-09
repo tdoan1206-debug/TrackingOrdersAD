@@ -34,9 +34,8 @@ public class TrackingLogServiceImpl implements TrackingLogService {
         User user = authenticationFacade.getCurrentUser();
 
         // check don hang co thuoc user
-        orderRepo.findByIdAndUser(orderId, user)
-                .orElseThrow(() ->
-                        new NotFoundException(HttpStatus.NOT_FOUND, "Order Not Found"));
+        orderRepo.findByIdAndUser(orderId, user).
+                orElseThrow(() -> new NotFoundException(HttpStatus.NOT_FOUND, "Order Not Found"));
 
         // Lay ra tracking history
         List<TrackingLog> trackingLogs = trackingLogRepo.findByOrderId(orderId);

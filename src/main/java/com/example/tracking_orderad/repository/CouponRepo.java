@@ -25,4 +25,7 @@ public interface CouponRepo extends JpaRepository<Coupon, String> {
     WHERE c.id = :couponId
 """)
     Optional<Coupon> findByIdForUpdate(@Param("couponId") String couponId);
+
+    @Query("Select c from Coupon c where c.code = :code ")
+    Optional<Coupon> findByCodeAndStatus(String code) ;
 }

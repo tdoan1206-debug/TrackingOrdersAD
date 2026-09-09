@@ -29,4 +29,12 @@ public interface CartItemRepo extends JpaRepository<CartItem, String> {
 
     //tìm 1 item cụ thể để điều chỉnh số lượng
     Optional<CartItem> findByCartAndProductVariant(Cart cart, ProductVariant productVariant);
+
+    @Query("""
+                select c
+                from CartItem c
+                where c.productVariant.id in :productVariantIds
+                and c.cart.user.username = :userName
+            """)
+    List<CartItem> findByProductVariantIdInAndUserName(List<String> productVariantIds, String userName);
 }

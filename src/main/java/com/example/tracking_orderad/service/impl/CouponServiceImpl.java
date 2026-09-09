@@ -1,7 +1,9 @@
 package com.example.tracking_orderad.service.impl;
 
+import com.example.tracking_orderad.dto.response.CouponsResponse;
 import com.example.tracking_orderad.entity.Coupon;
 import com.example.tracking_orderad.exception.BadRequestException;
+import com.example.tracking_orderad.exception.BusinessException;
 import com.example.tracking_orderad.exception.NotFoundException;
 import com.example.tracking_orderad.repository.CouponRepo;
 import com.example.tracking_orderad.service.CouponService;
@@ -9,6 +11,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.Date;
@@ -75,6 +78,28 @@ public class CouponServiceImpl implements CouponService {
         couponRepo.save(coupon);
 
         log.info("Coupon {} used {}", couponCode, coupon.getUsedCount());
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class,
+            readOnly = true)
+    public CouponsResponse validateCoupon(String couponCode) {
+        log.info("Bắt đầu kiểm tra coupon. couponCode={}", couponCode);
+        Coupon coupons = couponRepo.findByCodeAndStatus(couponCode)
+                .orElseThrow(() -> new NotFoundException(HttpStatus.NOT_FOUND, "Coupon không tồn tại"));
+
+        if (coupons.getUsedCount() >= coupons.getMaxUsage()) {
+            log.warn("Coupon đã hết lượt sử dụng") ;
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "Coupon đã hết lượt sử dụng");
+        }
+
+        CouponsResponse response = new CouponsResponse();
+        response.setId(coupons.getId());
+        response.setCouponType(coupons.getDiscountType());
+        response.setValue(coupons.getDiscountValue());
+
+        log.info("Kiểm tra coupon thành công") ;
+        return response;
     }
 
 
