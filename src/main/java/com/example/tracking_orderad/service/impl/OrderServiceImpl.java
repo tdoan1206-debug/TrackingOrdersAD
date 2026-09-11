@@ -137,13 +137,8 @@ public class OrderServiceImpl implements OrderService {
     }
 
     // create TrackingLog
-    private void createTrackingLog(Order order,
-                                   User updateBy,
-                                   OrderStatusEnum fromStatus,
-                                   OrderStatusEnum toStatus,
-                                   String title,
-                                   String note,
-                                   String location) {
+    private void createTrackingLog(Order order, User updateBy, OrderStatusEnum fromStatus,
+                                   OrderStatusEnum toStatus, String title, String note, String location) {
 
         TrackingLog trackingLog = new TrackingLog();
 
@@ -354,41 +349,115 @@ public class OrderServiceImpl implements OrderService {
         //get user login
         User user = authenticationFacade.getCurrentUser();
 
+        log.info("Bắt đầu tạo đơn hàng cho người dùng: {}", user.getUsername());
+
         // dam bao user dat hang bang address cua minh
-        UserAddress address = userAddressRepo
-                .findByIdAndUser(req.getAddressId(), user)
-                .orElseThrow(() ->
-                        new NotFoundException(HttpStatus.NOT_FOUND, "Address Not Found"));
+        UserAddress address = userAddressRepo.findByIdAndUser(req.getAddressId(), user)
+                .orElseThrow(() -> new NotFoundException(HttpStatus.NOT_FOUND, "Address Not Found"));
+
+        log.info("Đã xác thực thông tin user , address ");
 
         // Mapping productVariantId -> quantity
         Map<String, Integer> quantityMap = getQuantityMap(req.getItems());
 
-        // Query product
-        List<ProductVariant> productVariants = loadProductVariants(req.getItems());
+        for (OrderSummaryItemReq item : req.getItems()) {
+            quantityMap.put(item.getProductVariantId(), item.getQuantity());
+        }
+        if (quantityMap.isEmpty()) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "Vui lòng chọn ít nhất một sản phẩm");
+        }
 
-        //validate variants
-        validateProductVariantsExist(productVariants, quantityMap);
+        //  Lấy Cart của user
+        Cart cart = cartRepo.findByUser(user).orElseThrow(() ->
+                        new NotFoundException(HttpStatus.NOT_FOUND, "Cart Not Found"));
 
-        // validate inventory
-        validateInventory(productVariants, quantityMap);
+        //  Lấy các CartItem được chọn
+        List<String> productVariantIds = new ArrayList<>(quantityMap.keySet()) ;
 
+        List<CartItem> selectedCartItems = cartItemRepo.findByCartAndProductVariantIdIn(cart,productVariantIds);
 
-        // tinh subtotal
-        BigDecimal subtotal = calculateSubtotal(productVariants, quantityMap);
+        if (selectedCartItems.size() != quantityMap.size()) {
+            throw new BusinessException(HttpStatus.FORBIDDEN, "Có sản phẩm không tồn tại trong giỏ hàng");
+        }
 
-        // coupon
+        // Mapping productVariantId -> CartItem
+        Map<String, CartItem> cartItemMap = new HashMap<>();
+
+        for (CartItem cartItem : selectedCartItems) {
+            cartItemMap.put(cartItem.getProductVariant().getId(), cartItem);
+        }
+
+        // Lấy ProductVariant
+        List<ProductVariant> productVariants = productVariantRepo.findAllById(productVariantIds);
+
+        // Validate ProductVariant
+        if (productVariants.size() != quantityMap.size()) {
+            throw new BusinessException(HttpStatus.NOT_FOUND, "Có sản phẩm không tồn tại");
+        }
+
+        Map<String, ProductVariant> variantMap = new HashMap<>();
+
+        for (ProductVariant productVariant : productVariants) {
+            variantMap.put(productVariant.getId(), productVariant);
+        }
+
+        // Validate quantity trong Cart
+        for (CartItem cartItem : selectedCartItems) {
+
+            String variantId = cartItem.getProductVariant().getId();
+
+            Integer requestQuantity = quantityMap.get(variantId);
+
+            if (!cartItem.getQuantity().equals(requestQuantity)) {
+                throw new BusinessException(HttpStatus.BAD_REQUEST, "Số lượng sản phẩm trong giỏ hàng đã thay đổi");
+            }
+        }
+
+        //  Tính subtotal + validate inventory
+        BigDecimal subtotal = BigDecimal.ZERO;
+
+        List<Inventory> inventories = new ArrayList<>();
+
+        for (ProductVariant productVariant : productVariants) {
+
+            Integer quantity = quantityMap.get(productVariant.getId());
+
+            Inventory inventory = productVariant.getInventory();
+
+            if (inventory == null) {
+                throw new BusinessException(HttpStatus.NOT_FOUND, "Sản phẩm không có trong kho");
+            }
+
+            Integer available = inventory.getQuantityInStock() ;
+
+            if (available < quantity) {
+                throw new BusinessException(HttpStatus.BAD_REQUEST, "Sản phẩm " + productVariant.getId()
+                                + " chỉ còn " + available);
+            }
+
+            // Giá = basePrice + priceModifier
+            BigDecimal unitPrice = productVariant.getProduct().getBasePrice().add(productVariant.getPriceModifier());
+
+            BigDecimal itemTotal = unitPrice.multiply(BigDecimal.valueOf(quantity));
+
+            subtotal = subtotal.add(itemTotal);
+
+            // Giữ chỗ inventory
+            inventory.setQuantityInStock(available - quantity) ;
+            inventories.add(inventory);
+        }
+
+        //  Coupon
         BigDecimal discountAmount = couponService.calculateCoupon(req.getCouponCode(), subtotal);
 
-        // ship
+        //  Shipping
         BigDecimal shippingFee = BigDecimal.valueOf(30000);
 
+        //  Grand total
+        BigDecimal grandTotal = subtotal.subtract(discountAmount).add(shippingFee);
 
-        //GrandTotal
-        BigDecimal grandTotal = subtotal
-                .subtract(discountAmount)
-                .add(shippingFee);
 
-        // Tao order
+        //  Tạo Order
         Order order = new Order();
 
         order.setUser(user);
@@ -399,75 +468,52 @@ public class OrderServiceImpl implements OrderService {
         order.setShippingFee(shippingFee);
         order.setGrandTotal(grandTotal);
         order.setPaymentType(req.getPaymentType());
-        order.setTrackingNumber(UUID.randomUUID().toString());
+        order.setTrackingNumber(UUID.randomUUID().toString()
+        );
+
         orderRepo.save(order);
 
-        List<OrderItem> orderItems = new ArrayList<>();
 
-        List<Inventory> inventories = new ArrayList<>();
+        // Tạo OrderItem
+        List<OrderItem> orderItems = new ArrayList<>();
 
         for (ProductVariant productVariant : productVariants) {
 
-            // lay quantity
             Integer quantity = quantityMap.get(productVariant.getId());
 
-            //price
-            BigDecimal unitPrice = productVariant.getProduct().getBasePrice()
-                    .add(productVariant.getPriceModifier());
+            BigDecimal unitPrice = productVariant.getProduct().getBasePrice().add(productVariant.getPriceModifier());
 
-
-            // orderItem
             OrderItem orderItem = new OrderItem();
+
             orderItem.setOrder(order);
             orderItem.setProductVariant(productVariant);
             orderItem.setQuantity(quantity);
             orderItem.setUnitPrice(unitPrice);
+
             orderItems.add(orderItem);
-
-            //inventory
-            Inventory inventory = productVariant.getInventory();
-            inventory.setQuantityInStock(inventory.getQuantityInStock() - quantity);
-            inventories.add(inventory);
-
         }
+
         orderItemRepo.saveAll(orderItems);
+
+        //  Cập nhật inventory
         inventoryRepo.saveAll(inventories);
 
-        // tang usedcount
-        couponService.increaseUsedCount(req.getCouponCode());
+        //  Tăng coupon used count
+        if (req.getCouponCode() != null && !req.getCouponCode().isBlank()) {
+            couponService.increaseUsedCount(req.getCouponCode());
+        }
 
-        // xoa gio hang
-        Cart cart = cartRepo.findByUser(user)
-                .orElseThrow(() ->
-                        new NotFoundException(HttpStatus.NOT_FOUND, "Cart Not Found"));
+        //  CHỈ XÓA các CartItem đã được chọn
+        cartItemRepo.deleteAll(selectedCartItems);
 
-        List<CartItem> cartItems = cartItemRepo.findByCart(cart);
+        log.info("Đã xóa {} sản phẩm đã mua khỏi giỏ hàng", selectedCartItems.size());
 
-        cartItemRepo.deleteAll(cartItems);
+        // 20. Tracking log
+        createTrackingLog(order, user, null, OrderStatusEnum.PENDING,
+                "Order Placed", "Customer placed the order successfully", "System");
 
-//        // ghi lai tracking log
-//        TrackingLog trackingLog = new TrackingLog();
-//        trackingLog.setOrder(order);
-//        trackingLog.setUpdateBy(user);
-//        trackingLog.setFromStatus(null);
-//        trackingLog.setToStatus(OrderStatusEnum.PENDING.name());
-//        trackingLog.setTitle("Order Placed");
-//        trackingLog.setNote("Customer placed the order successfully");
-//        trackingLog.setLocationDescription("System");
-//        trackingLog.setTimestamp(new Timestamp(System.currentTimeMillis()));
-//
-//        trackingLogRepo.save(trackingLog);
 
-        createTrackingLog(
-                order,
-                user,
-                null,
-                OrderStatusEnum.PENDING,
-                "Order Placed",
-                "Customer placed the order successfully",
-                "System"
-        );
-
+        // 21. Response
         return PlaceOrderRes.builder()
                 .orderId(order.getId())
                 .trackingNumber(order.getTrackingNumber())
@@ -475,6 +521,7 @@ public class OrderServiceImpl implements OrderService {
                 .grandTotal(order.getGrandTotal())
                 .message("Place order successfully")
                 .build();
+
     }
 
     @Override

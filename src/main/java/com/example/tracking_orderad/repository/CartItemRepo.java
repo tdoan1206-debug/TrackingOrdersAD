@@ -37,4 +37,6 @@ public interface CartItemRepo extends JpaRepository<CartItem, String> {
                 and c.cart.user.username = :userName
             """)
     List<CartItem> findByProductVariantIdInAndUserName(List<String> productVariantIds, String userName);
+
+    List<CartItem> findByCartAndProductVariantIdIn(Cart cart, List<String> productVariantIds);
 }

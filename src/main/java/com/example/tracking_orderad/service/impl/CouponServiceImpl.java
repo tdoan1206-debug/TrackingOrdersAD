@@ -45,9 +45,7 @@ public class CouponServiceImpl implements CouponService {
 
         // check minimum order
         if (subtotal.compareTo(coupon.getMinOrderValue()) < 0) {
-            throw new BadRequestException(
-                    HttpStatus.BAD_REQUEST,
-                    "Minimum order value not reached");
+            throw new BadRequestException(HttpStatus.BAD_REQUEST, "Minimum order value not reached");
         }
 
         // calculate
@@ -56,8 +54,7 @@ public class CouponServiceImpl implements CouponService {
                 return coupon.getDiscountValue();
 
             case PERCENT:
-                return subtotal.multiply(coupon.getDiscountValue())
-                        .divide(BigDecimal.valueOf(100));
+                return subtotal.multiply(coupon.getDiscountValue()).divide(BigDecimal.valueOf(100));
 
             default:
                 return BigDecimal.ZERO;
